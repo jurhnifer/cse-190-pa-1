@@ -40,10 +40,7 @@ def search():
 
     return response
 
-@app.route('/api/history')
-def history():
-    
-    
+ 
 
 
 if __name__ == "__main__":
