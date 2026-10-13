@@ -34,13 +34,42 @@ def search():
                INSERT INTO userinfo.clients
                VALUES (%s)
             """,
-            (q,))
+            (query,))
+
+        conn.commit()
+        conn.close()
     # Create 303 See Other response
     response = make_response("See Other", 303, redirect(url_for('index')))
 
     return response
 
- 
+@app.route('/api/history')
+def history():
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT client_id, json_agg(searches ORDER BY ts DESC) as recent_searches
+                FROM userinfo.clients
+            """)
+
+            search_history = cur.fetchall()
+
+    return jsonify(search_history)
+
+
+@app.route('/dump')
+def dump():
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT json_agg(clients) AS all_clients
+                FROM clients
+            """) 
+
+            clients_info = cur.fetchall()
+
+    return jsonify(clients_info)
+    
 
 
 if __name__ == "__main__":
