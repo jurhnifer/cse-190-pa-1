@@ -4,7 +4,7 @@ app = Flask(__name__)
 
 
 def get_db_connection():
-    return psycopg.connect(os.environ["postgresql://postgres.rirjhcnxklpdlexoidqd:JenandLei101@aws-1-us-west-2.pooler.supabase.com:5432/postgres"])
+    return psycopg.connect(os.environ["DATABASE_URL"])
 
 @app.route('/')
 def index():
@@ -26,7 +26,7 @@ def jsontest():
 @app.route('/search')
 def search():
     # Get the query
-    query = request.form.get('q')
+    query = request.args.get('q')
     # Store query on database
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -36,10 +36,8 @@ def search():
             """,
             (query,))
 
-        conn.commit()
-        conn.close()
     # Create 303 See Other response
-    response = make_response("See Other", 303, redirect(url_for('index')))
+    response = redirect(url_for('index'), code=303)
 
     return response
 
