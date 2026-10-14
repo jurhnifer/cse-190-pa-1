@@ -48,8 +48,8 @@ def jsontest():
 def search():
     # Get the query
     search = request.args.get('q')
-    # If whitespace, go redirect
-    if not search:
+    # If whitespace, go redirect; use strip to remove spaces/tabs
+    if not search.strip():
         return redirect(url_for('index'), code=303)
     # Get ip
     ip = request.remote_addr
