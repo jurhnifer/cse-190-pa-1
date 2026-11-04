@@ -26,22 +26,21 @@ def valid_response(response):
     if data.get("cur") != "USD":
         return False
 
-    seatbids = data.get("seatbid", [])
-    bids = seatbids[0].get("bid", [])
-    for bid in bids:
+    for seatbid in data.get("seatbid", []):
+        for bid in seatbid.get("bid", []):
     # Check if names impid didn't send
-        if bid.get("impid") != "1":
-            return False
+            if bid.get("impid") != "1":
+                return False
     # Check if not a 300 x 250 slot
         # Width
-        if bid.get("w") != 300:
-            return False
+            if bid.get("w") != 300:
+                return False
         # Height
-        if bid.get("h") != 250:
-            return False
+            if bid.get("h") != 250:
+                return False
     # Check if below bid floor
-        if bid.get("price") < 1.00:
-            return False
+            if bid.get("price") is None or bid.get("price") < 1.00:
+                return False
 
     return True;
 
@@ -356,7 +355,7 @@ def feedback():
             # Check if the auction_id exists in the winner
             cur.execute("""
                 SELECT dsp_domain
-                FROM winners
+                FROM userinfo.winners
                 WHERE auction_id = %s 
             """, (auction_id,))
 
