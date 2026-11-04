@@ -12,7 +12,7 @@ app.json.sort_keys = False
 def get_db_connection():
     return psycopg.connect(os.environ["DATABASE_URL"])
 
-def valid_response(response):
+def valid_response(response, request_id):
     # Check if response is 200
     if response.status_code != 200:
         return False
@@ -21,6 +21,10 @@ def valid_response(response):
     try:
         data = response.json()
     except ValueError:
+        return False
+
+    # Check if valid ID
+    if data.get("id") != request_id:
         return False
     # Check if in a currency other than USD
     if data.get("cur") != "USD":
@@ -250,28 +254,29 @@ def ad():
 
     print(segments)   
 
-    # Gather badv requests
+    # Gather badv, skipping any NULL domains
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT domain
-                FROM userinfo.badv
-            """)
+            cur.execute("SELECT domain FROM userinfo.badv")
+            badv = [row[0] for row in cur.fetchall() if row[0]]
 
-            badv = [row[0] for row in cur.fetchall()]
-    
+    # Generate the user
+    user = {"data": [{"id": "boogle",
+                      "segment": segments,
+                      "ext": {"segtax": 500}}]}
+    # Check to handle null
+    if boogle_id:
+        user["id"] = boogle_id
+
     # Generate the OpenRTB request
     openrtb_request = {
         "id": request_id,
         "imp": [{"id": "1",
                  "banner": {"format": [{"w": 300, "h": 250}]},
                  "bidfloor": 1.00}],
-        "device": {"ua": device_type,
+        "device": {"ua": device_type or "",
                   "ip": ip},
-        "user": {"id": boogle_id,
-                 "data": [{"id": "boogle",
-                           "segment": segments,
-                           "ext": {"segtax": 500}}]},
+        "user": user,
         "tmax": 500,
         "badv": badv
     }
@@ -290,7 +295,7 @@ def ad():
         
 
         # Loop through all to see if valid bid
-        if valid_response(dsp_response):
+        if valid_response(dsp_response, request_id):
             data = dsp_response.json()
             # Get the bid & price
             # Could there be multiple seatbids??
@@ -300,7 +305,7 @@ def ad():
 
     print(valid_bids)
     if len(valid_bids) == 0:
-        return "No valid bid", 202
+        return "", 200
     # Pick & price the winner
     # First sort:
     sorted_bids = sorted(valid_bids, key=lambda x: x["price"], reverse=True)
@@ -326,13 +331,20 @@ def ad():
             cur.execute("""
                 INSERT INTO userinfo.winners(auction_id, dsp_domain)
                 VALUES (%s, %s)
-                """, (winner.get("id"), winner.get("adomain")))
+                """, (request_id, winner.get("adomain")))
 
     # Bill to the DSP using a GET request
-    try: 
-        requests.get(url=bill_url, timeout=0.5)
-    except requests.exceptions.RequestException as e:
-        print("Billing request failed:", e)
+    for attempt in range(3):
+        try:
+            bill_response = requests.get(bill_url, timeout=2)
+            if not bill_response.ok:
+                print("Billing returned", bill_response.status_code)
+            break  # the server received it, so never send it again
+        except requests.exceptions.ConnectionError as e:
+            print(f"Billing connection failed (attempt {attempt + 1}):", e)
+        except requests.exceptions.RequestException as e:
+            print("Billing request failed:", e)
+            break
 
     # Display the ad
     
@@ -365,10 +377,11 @@ def feedback():
                 return "No auction id exists", 404
 
             domain = row[0]
-            cur.execute("""
-                INSERT INTO userinfo.badv(domain)
-                VALUES (%s)
-            """, (domain,))
+            if domain:
+                cur.execute("""
+                    INSERT INTO userinfo.badv(domain)
+                    VALUES (%s)
+                """, (domain,))
 
     return "Recorded the complaint", 200
                 
